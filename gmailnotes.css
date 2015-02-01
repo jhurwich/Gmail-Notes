@@ -27,6 +27,18 @@ div.note-control:hover > .note {
   opacity: 1;
   -webkit-transition-delay: 0s;
 }
+div.note-control .note-svg {
+  background-color: #eee;
+}
+div.note-control:hover .note-svg {
+  background-color: red;
+}
+div.note-control .icon-component {
+  stroke: #333333;
+}
+div.note-control:hover .icon-component {
+  stroke: #111111;
+}
 
 div.note-icon {
   width: 24px;
@@ -36,6 +48,14 @@ div.note-icon {
   background-repeat: no-repeat;
 
   float: left;
+}
+
+div.note-icon > svg {
+  position: absolute;
+  left: 50%;
+  margin-left: -7px;
+  top: 50%;
+  margin-top: -7px;
 }
 
 div.note {
