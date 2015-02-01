@@ -99,20 +99,20 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
         });
         break;
 
-      case "set_autoskip":
-        chrome.storage.sync.get("autoskip", function(stored) {
-          if (typeof(stored.autoskip) == "undefined") {
-            stored.autoskip = {};
+      case "setNote":
+        chrome.storage.sync.get("notes", function(stored) {
+          if (typeof(stored.notes) == "undefined") {
+            stored.notes = {};
+          }
+          stored.notes[request.subject] = { text: request.text, color: request.color };
+
+          if (typeof(stored.notes[request.subject]) != "undefined" && request.text == "") {
+            // clearing note, no text provided
+            delete stored.notes[request.subject];            
           }
 
-          if (typeof(request.on) != "undefined") {
-            stored.autoskip[request.on] = true;
-          }
-          else {
-            delete stored.autoskip[request.off];
-          }
-
-          chrome.storage.sync.set({ "autoskip" : stored.autoskip }, function() {
+          chrome.storage.sync.set({ "notes" : stored.notes }, function() {
+            response.newNoteMap = stored.notes;
             GmailNotes.Util.postMessage(port.sender.tab.id, response);
           });
         });

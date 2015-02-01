@@ -23,5 +23,6 @@
     "run_at": "document_end"
   }],
   "web_accessible_resources": ["images/note-on.png",
-                               "images/note-off.png"]
+                               "images/note-off.png",
+                               "images/modal-close.png"]
  }

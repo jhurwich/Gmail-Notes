@@ -1,5 +1,3 @@
-HypeMPlus
+GmailNotes
 =========
-- Always Skip any Track
-- Automatically Trigger Login to HypeM
-- Have Chrome read song info
+- Add a note to any email in Gmail
