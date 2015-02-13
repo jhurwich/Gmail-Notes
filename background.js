@@ -88,7 +88,7 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
       var response = GmailNotes.Util.newResponse(request);
 
       switch (request.action) {
-      case "get_notes":
+      case "getNotes":
         chrome.storage.sync.get("notes", function(stored) {
           response.notes = stored.notes;
           if (typeof(response.notes) == "undefined") {
@@ -115,6 +115,23 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
             response.newNoteMap = stored.notes;
             GmailNotes.Util.postMessage(port.sender.tab.id, response);
           });
+        });
+        break;
+
+      case "getLastColor":
+        chrome.storage.sync.get("lastColor", function(stored) {
+          response.lastColor = stored.lastColor;
+          if (typeof(response.lastColor) == "undefined") {
+            response.lastColor = "";
+          }
+
+          GmailNotes.Util.postMessage(port.sender.tab.id, response);
+        });
+        break;
+
+      case "setLastColor":
+        chrome.storage.sync.set({ "lastColor" : request.lastColor }, function() {
+          GmailNotes.Util.postMessage(port.sender.tab.id, response);
         });
         break;
 

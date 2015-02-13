@@ -88,7 +88,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         utils.log("Notes.run() start");
 
         utils.log("-- Requesting notes from backend");
-        var request = utils.newRequest({ action : "get_notes",}, function(response) {
+        var request = utils.newRequest({ action : "getNotes",}, function(response) {
           GmailNotes.Inject.Notes.noteMap = response.notes;
           
           utils.log("-- " + Object.keys(GmailNotes.Inject.Notes.noteMap).length + " notes from backend");
@@ -206,11 +206,12 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var noteOnCell = $("<td class='note-cell'>\
                               <div class='note-control'>\
                                 <div class='note-icon note-on'> </div>\
-                                <div class='note'>Some cool note will be written here.</div>\
+                                <div class='note'></div>\
                               </div>\
                             </td>");
         var noteOnDiv = $(noteOnCell).find(".note-on").first();
-        $(noteOnDiv).append($(GmailNotes.Util.noteIconSVG));
+        $(noteOnDiv).append($(GmailNotes.Util.noteIconSVG)
+                             .css("background-color", GmailNotes.Inject.Notes.noteMap[GmailNotes.Util.getSubjectForRow(row)].color));
         
         $(noteOnCell).click(GmailNotes.Inject.Notes.setNote.curry(row));
 
@@ -235,7 +236,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
                                </div>\
                              </td>");
         var noteOffDiv = $(noteOffCell).find(".note-off").first();
-        $(noteOffDiv).css('background-image', "url('" + chrome.extension.getURL("images/note-off.png") + "')");
+        $(noteOffDiv).append($(GmailNotes.Util.noteIconSVG));
         
         $(noteOffCell).click(GmailNotes.Inject.Notes.setNote.curry(row));
 
@@ -264,25 +265,39 @@ if (typeof(GmailNotes.Inject) == "undefined") {
                 <input class='submit-button' type='button' value='Submit'>\
               </div>\
             </div>\
-          </div>")
+          </div>");
 
-        var closeDiv = $(modal).find(".modal-close").first();
-        $(closeDiv).css('background-image', "url('" + chrome.extension.getURL("images/modal-close.png") + "')");
-        $(closeDiv).bind('click', GmailNotes.Inject.Notes.close);
+        var requestOptions = { action: "getLastColor" };
 
-        var submitButton = $(modal).find(".submit-button").first();
-        var subject = GmailNotes.Util.getSubjectForRow(row);
-        $(submitButton).bind('click', GmailNotes.Inject.Notes.submit.curry(subject));
+        var request = GmailNotes.Util.newRequest(requestOptions, function(response) {
+          var closeDiv = $(modal).find(".modal-close").first();
+          $(closeDiv).css('background-image', "url('" + chrome.extension.getURL("images/modal-close.png") + "')");
+          $(closeDiv).bind('click', GmailNotes.Inject.Notes.close);
 
-        // if there's a note for the row, show it in the text area
-        var noteArea = $(modal).find(".note-area").first();
-        if (GmailNotes.Util.rowHasNoteTest(row)) {
-          noteArea.val(GmailNotes.Inject.Notes.noteMap[subject].text);
-          $(noteArea).select();
-        }
+          var submitButton = $(modal).find(".submit-button").first();
+          var subject = GmailNotes.Util.getSubjectForRow(row);
+          $(submitButton).bind('click', GmailNotes.Inject.Notes.submit.curry(subject));
 
-        $("body").prepend(blackout);
-        $("body").prepend(modal);
+          var colorChooser = $(modal).find(".color-chooser").first();
+          if (typeof(GmailNotes.Inject.Notes.noteMap[subject]) != "undefined" &&
+              GmailNotes.Inject.Notes.noteMap[subject].color.length > 0) {
+            $(colorChooser).val(GmailNotes.Inject.Notes.noteMap[subject].color);
+          } 
+          else if (typeof(response.lastColor) != "undefined" && response.lastColor.length > 0) {
+            $(colorChooser).val(response.lastColor);
+          }
+
+          // if there's a note for the row, show it in the text area
+          var noteArea = $(modal).find(".note-area").first();
+          if (GmailNotes.Util.rowHasNoteTest(row)) {
+            noteArea.val(GmailNotes.Inject.Notes.noteMap[subject].text);
+            $(noteArea).select();
+          }
+
+          $("body").prepend(blackout);
+          $("body").prepend(modal);
+        });
+        GmailNotes.Inject.sendMessage(request);
 
         // prevent event propagation  
         return false;
@@ -294,7 +309,9 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var requestOptions = { action: "setNote" };
         requestOptions['subject'] = subject;
         requestOptions['text'] = $(modal).find(".note-area").first().val();
-        requestOptions['color'] = $(modal).find(".color-chooser").first().val();
+
+        var color = $(modal).find(".color-chooser").first().val();
+        requestOptions['color'] = color;
 
         var request = GmailNotes.Util.newRequest(requestOptions, function(response) {
           GmailNotes.Inject.Notes.noteMap = response.newNoteMap;
@@ -302,12 +319,26 @@ if (typeof(GmailNotes.Inject) == "undefined") {
           GmailNotes.Inject.Notes.close();
         });
         GmailNotes.Inject.sendMessage(request);
+
+        GmailNotes.Inject.Notes.setLastColor(color);
       },
 
       close : function(event) {
+        var color = $("body").find(".modal").first().find(".color-chooser").first().val();
         $("body").find("#blackout").first().remove();
         $("body").find(".modal").first().remove();
+
+        GmailNotes.Inject.Notes.setLastColor(color);
       },
+
+      setLastColor : function(color) {
+        var requestOptions = { action: "setLastColor" };
+        requestOptions['lastColor'] = color;
+        var request = GmailNotes.Util.newRequest(requestOptions, function(response) {
+
+        });
+        GmailNotes.Inject.sendMessage(request);
+      }
     },
 
     sendMessage: function(message) {
