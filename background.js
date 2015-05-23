@@ -6,7 +6,7 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
 
   GmailNotes.Bkgrd = {
 
-    debug : false,
+    debug : true,
 
     run : function() {
       var self = this;
@@ -20,34 +20,11 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
 
     // requests are used for messages from the Browser Action
     requestListener: function(request, sender, sendResponse) {
+      var self = GmailNotes.Bkgrd;
       switch (request.action) {
 
-      case "getVoices":
-        chrome.storage.sync.get("currVoice", function(object) {
-          chrome.tts.getVoices(function(voices) {
-            var response = {};
-            response.voices = voices;
-            if (typeof(object.currVoice) == "undefined") {
-              object.currVoice = "off"; // default to off
-            }
-            response.currVoice = object.currVoice;
-            sendResponse(response);
-          });
-        });
-        break;
-
-      case "setSpeech":
-        var voice = request.voice;
-        chrome.storage.sync.set({ "currVoice" : voice }, function() {
-          sendResponse({});
-
-          var request = GmailNotes.Util.newRequest({ action: "set_voice",
-                                                    voice: voice });
-          GmailNotes.Util.postMessage("all", request);
-        });
-        break;
-
       case "rerun":
+        self.log("Received request for 'rerun'");
         var request = GmailNotes.Util.newRequest({ action: "rerun" });
         GmailNotes.Util.postMessage("all", request);
         break;
@@ -84,6 +61,7 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
       if (request.type != "request") {
         return;
       }
+      var self = GmailNotes.Bkgrd;
 
       var response = GmailNotes.Util.newResponse(request);
 

@@ -14,6 +14,11 @@
     "scripts" : ["background-util.js",
                  "background.js"]
   },
+  "browser_action": {
+    "default_icon": "images/gmailnotes-38.png",
+    "default_title": "GmailNotes",
+    "default_popup": "gmailnotes-ba.html"
+  },
   "content_scripts": [{
     "matches": ["http://gmail.com/*", "https://gmail.com/*", "http://mail.google.com/*", "https://mail.google.com/*"],
     "css": ["gmailnotes.css"],

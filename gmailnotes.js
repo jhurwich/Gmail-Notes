@@ -9,7 +9,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
     debug : true,
 
     port : null,
-    currVoice: "off",
     init : function() {
       var self = this;
       self.log("Beginning initialization");
@@ -48,6 +47,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       if (response.type != "response") {
         return;
       }
+      var self = GmailNotes.Inject;
       var utils = GmailNotes.Util;
 
       if (response.callbackID in utils.pendingCallbacks &&
@@ -65,13 +65,13 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       if (request.type != "request") {
         return;
       }
+      var self = GmailNotes.Inject;
+
       switch (request.action) {
-      case "set_voice":
-        GmailNotes.Inject.currVoice = request.voice;
-        break;
 
       case "rerun":
-        GmailNotes.Inject.run();
+        self.log("Received request for 'rerun', executing.")
+        self.run();
         break;
 
       default:
@@ -139,31 +139,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
           GmailNotes.Inject.Notes.modifyMailList();
         }
       },
-
-      /*
-      modifyPlayer : function() {
-        var playerAutoskip = $("<div class='playerAutoskip'></div>");
-        $(playerAutoskip).css('background-image', "url('" + chrome.extension.getURL("images/player-autoskip.png") + "')");
-        $(playerAutoskip).hover(function() {
-          $(this).css('background-image', "url('" + chrome.extension.getURL("images/player-autoskip-hover.png") + "')");
-        }, function() {
-          $(this).css('background-image', "url('" + chrome.extension.getURL("images/player-autoskip.png") + "')");
-        });
-        $(playerAutoskip).click(GmailNotes.Inject.autoskipFromPlayer);
-
-        if ($("div.playerAutoskip").length !== 0) {
-          $("div.playerAutoskip").remove();
-        }
-        $(playerAutoskip).insertBefore($("#player-controls").find("#playerFav").first());
-      },
-      
-
-      autoskipFromPlayer : function() {
-        var id = GmailNotes.Util.getCurrentTrackID();
-        GmailNotes.Inject.toggleAutoskip($("div[data-itemid='" + id + "']").first());
-        GmailNotes.Util.nextTrack();
-      },
-      */
 
       markInProgress : false,
       cellsInMailRow : 8,
