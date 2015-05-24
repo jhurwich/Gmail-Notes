@@ -5,15 +5,7 @@ if (typeof(GmailNotes) == "undefined") {
 if (typeof(GmailNotes.Util) == "undefined") {
   GmailNotes.Util = {
 
-    charsToReturn: 70,
-    getSubjectForRow: function(mailRow) {
-      // the subject cell has an id but no title
-      var subject = $(mailRow).find("span[id]").not("[title]").first().text();
-
-      // we only return the first X characters
-      return subject.substring(0, GmailNotes.Util.charsToReturn);
-    },
-
+    SUBJECT_CROP_LENGTH: 70,
     rowHasNoteTest: function(index, mailRow) {
       if (arguments.length == 1) {
         mailRow = index;
@@ -21,6 +13,14 @@ if (typeof(GmailNotes.Util) == "undefined") {
       }
       var subject = GmailNotes.Util.getSubjectForRow(mailRow);
       return (typeof(GmailNotes.Inject.Notes.noteMap[subject]) != "undefined");
+    },
+
+    getSubjectForRow: function(mailRow) {
+      // the subject cell has an id but no title
+      var subject = $(mailRow).find("span[id]").not("[title]").first().text();
+
+      // we only return the first X characters
+      return subject.substring(0, GmailNotes.Util.SUBJECT_CROP_LENGTH);
     },
 
     pendingCallbacks: {},

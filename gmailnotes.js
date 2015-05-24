@@ -34,13 +34,104 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       self.log("Initialization complete");
     },
 
-    run : function() {
-      var self = this;
+    TRY_DELAY : 400,
+    MAX_TRIES : 5,
+    run : function(count) {
+      var self = GmailNotes.Inject;
       self.log("run() start");
 
+      // cancel if deferred too many times
+      if (count > self.MAX_TRIES) {
+        self.log("(!!!!!) Cannot start, Gmail did not finish loading.")
+        return;
+      }
+
+      // defer run if still loading
+      if ($("div#loading").length > 0 && $("div#loading").css("display") != "none") {
+        if (typeof(count) == "undefined") {
+          count = 0;
+        }
+        self.log("run() deferred, #" + (count + 1));
+        setTimeout(self.run, self.TRY_DELAY, (count + 1));
+        return;
+      }
+
+      self.setupObservers();
       self.Notes.run();
 
       self.log("run() complete");
+    },
+
+    mainObserver : null,
+    mailListObserver : null,
+    setupObservers : function() {
+      var utils = GmailNotes.Util;
+
+      var observeMailTables = function (mailTables) {
+        // setup a mutation observer to see if the maillists are ever refreshed so we can add marks again
+        MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
+        if (GmailNotes.Inject.mailListObserver != null) {
+          GmailNotes.Inject.mailListObserver.disconnect();
+        }
+        GmailNotes.Inject.mailListObserver = new MutationObserver(GmailNotes.Inject.Notes.onChange);
+
+        // define what element should be observed by the observer
+        // and what types of mutations trigger the callback
+        $(mailTables).each(function (index, table) {
+          
+          // confirm this is actually a mailList, break if not
+          if ($(table).find("tr").first().find("td:has(> div[role='img'])").length == 0) {
+            return;
+          }
+
+          if (typeof($(table).attr("observed")) == "undefined" || !($(table).attr("observed"))) {
+            GmailNotes.Inject.mailListObserver.observe(table, {
+              subtree: true,
+              childList: true,
+              attributes: false
+            });
+            $(table).attr("observed", true);
+          }
+        });
+        GmailNotes.Inject.Notes.modifyUI();
+      }
+      observeMailTables($("div:has(> div:has(> table))").find("table"));
+
+      // setup a mutation observer to catch when maillists are added/refreshed
+      MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
+      if (GmailNotes.Inject.mainObserver != null) {
+        GmailNotes.Inject.mainObserver.disconnect();
+      }
+      GmailNotes.Inject.mainObserver = new MutationObserver(function(mutations, observer) {
+        var significantChange = false;
+        for (var i = 0; i < mutations.length; i++) { 
+          var tables = $(mutations[i].target).find("table").not("table[observed='true']");
+          if (tables.length == 0) {
+            // no new tables or maillists
+            continue;
+          }
+
+          for (var j = 0; j < tables.length; j++) {
+            var colgroup = $(tables[j]).find("colgroup").first();
+            if ($(colgroup).children("col").length >= GmailNotes.Inject.Notes.cellsInMailRow) {
+              observeMailTables($("div:has(> div:has(> table))").find("table"));
+            }
+          }
+        }
+        
+        if (significantChange) {
+          GmailNotes.Inject.Notes.modifyUI();
+        }
+      });
+
+      // Use the Gmail link to find the main div
+      var gmailA = $("a[title='Gmail']").first();
+      var mainDiv = $(gmailA).closest("body > div");
+      GmailNotes.Inject.mainObserver.observe(mainDiv.first().get(0), {
+        subtree: true,
+        childList: true,
+        attributes: false
+      });
     },
 
     handleResponse: function(response) {
@@ -82,7 +173,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
 
     Notes : {
       noteMap : {},
-      observer : null,
       run : function() {
         var utils = GmailNotes.Util;
         utils.log("Notes.run() start");
@@ -94,33 +184,8 @@ if (typeof(GmailNotes.Inject) == "undefined") {
           utils.log("-- " + Object.keys(GmailNotes.Inject.Notes.noteMap).length + " notes from backend");
           // utils.log("-- " + JSON.stringify(GmailNotes.Inject.Notes.noteMap));
 
-          GmailNotes.Inject.Notes.modifyMailList();
+          GmailNotes.Inject.Notes.modifyUI();
           utils.log("-- adding notes complete.")
-
-
-          // setup a mutation observer to see if the maillists are ever refreshed so we can add marks again
-          MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
-          if (GmailNotes.Inject.Notes.observer != null) {
-            GmailNotes.Inject.Notes.observer.disconnect();
-          }
-          GmailNotes.Inject.Notes.observer = new MutationObserver(GmailNotes.Inject.Notes.onChange);
-
-          // define what element should be observed by the observer
-          // and what types of mutations trigger the callback
-          var mailLists = $("div:has(> div:has(> table))");
-          $(mailLists).each(function (index, elem) {
-            
-            // confirm this is actually a mailList, break if not
-            if ($(elem).find("tr").first().find("td:has(> div[role='img'])").length == 0) {
-              return;
-            }
-
-            GmailNotes.Inject.Notes.observer.observe(elem, {
-              subtree: true,
-              childList: true,
-              attributes: false
-            });
-          });
         });
         GmailNotes.Inject.port.postMessage(request);
 
@@ -129,21 +194,55 @@ if (typeof(GmailNotes.Inject) == "undefined") {
 
 
       onChange : function(mutations, observer) {
+        var utils = GmailNotes.Util;
         var significantChange = false;
         for (var i = 0; i < mutations.length; i++) { 
           if (typeof($(mutations[i].target).attr("noted")) == "undefined") {
             significantChange = true;
           }
         }
+        
         if (significantChange) {
-          GmailNotes.Inject.Notes.modifyMailList();
+          GmailNotes.Inject.Notes.modifyUI();
         }
       },
 
       markInProgress : false,
       cellsInMailRow : 8,
-      modifyMailList : function() {
+      modifyUI : function() {
+        var utils = GmailNotes.Util;
         GmailNotes.Inject.Notes.markInProgress = true;
+
+        var mailPresentation = $('div[role="main"] table[role="presentation"]');
+        if (mailPresentation.length > 0) {
+          // we're in the reading mail view, mark the header only
+          utils.log("Modifying Message View");
+
+          var mailHeader = $(mailPresentation).find("h2").first();
+          var subject = mailHeader.text().substring(0, GmailNotes.Util.SUBJECT_CROP_LENGTH); // make sure the length is cropped
+
+          if (typeof(GmailNotes.Inject.Notes.noteMap[subject]) == "undefined") {
+            // mark non-note
+            var noteOffCell = $("<td class='note-cell'>\
+                                   <div class='note-control'>\
+                                     <div class='note-icon note-off'> </div>\
+                                   </div>\
+                                 </td>");
+            var noteOffDiv = $(noteOffCell).find(".note-off").first();
+            $(noteOffDiv).append($(utils.noteIconSVG));
+            $(mailHeader).before(noteOffCell);
+          } else {
+            // mark note
+          }
+
+        } else {
+          // We're viewing the full mail list, begin marking rows
+          utils.log("Modifying Mail List");
+          GmailNotes.Inject.Notes.modifyMailList();
+        }
+      },
+
+      modifyMailList : function() {
         var allRows = $("tbody > tr");
 
         var isMailRowTest = function(index, row) {
@@ -290,7 +389,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
 
         var request = GmailNotes.Util.newRequest(requestOptions, function(response) {
           GmailNotes.Inject.Notes.noteMap = response.newNoteMap;
-          GmailNotes.Inject.Notes.modifyMailList();
+          GmailNotes.Inject.Notes.modifyUI();
           GmailNotes.Inject.Notes.close();
         });
         GmailNotes.Inject.sendMessage(request);
@@ -335,13 +434,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
 
 // Extension main script
 var main = function(count) {
-  if (document.getElementById("menu-username") == null &&
-      count <= 5) {
-    // can't tell if logged in yet, defer
-    setTimeout(main, 400, (count + 1));
-    return;
-  }
-
   GmailNotes.Inject.init();
   GmailNotes.Inject.run();
 };
