@@ -362,7 +362,17 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         $(noteOnDiv).append($(GmailNotes.Util.noteIconSVG)
                              .css("background-color", noteColor));
         
-        $(noteOnCell).click(GmailNotes.Inject.Notes.setNote.curry(subject));
+        $(noteOnCell).mousedown(function(e) {
+          e.preventDefault();
+          if (e.which == 2) {
+            // middle click
+            GmailNotes.Inject.Notes.clearNote(subject);
+          } else {
+            // left click
+            GmailNotes.Inject.Notes.setNote(subject);
+          }
+          return false;
+        });
 
         var note = $(noteOnCell).find(".note").first();
         note.text(noteText);
@@ -379,14 +389,37 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var noteOffDiv = $(noteOffCell).find(".note-off").first();
         $(noteOffDiv).append($(GmailNotes.Util.noteIconSVG));
         
-        $(noteOffCell).click(GmailNotes.Inject.Notes.setNote.curry(subject));
+        $(noteOffCell).mousedown(function(e) {
+          e.preventDefault();
+          if (e.which == 2) {
+            // middle click
+            GmailNotes.Inject.Notes.clearNote(subject);
+          } else {
+            // left click
+            GmailNotes.Inject.Notes.setNote(subject);
+          }
+          return false;
+        });
 
         return noteOffCell;
       },
 
-      setNote : function(subject, e) {
-        e.preventDefault();
+      clearNote : function(subject) {
+        var utils = GmailNotes.Util;
+        var requestOptions = { action: "setNote" };
+        requestOptions['subject'] = subject;
+        requestOptions['text'] = "";
 
+        var request = utils.newRequest(requestOptions, function(response) {
+          GmailNotes.Inject.Notes.noteMap = response.newNoteMap;
+
+          utils.log("Modifying UI after clearing a note");
+          GmailNotes.Inject.Notes.modifyUI();
+        });
+        GmailNotes.Inject.sendMessage(request);
+      },
+
+      setNote : function(subject) {
         var blackout = $("<div id='blackout'></div>");
         var modal = $("\
           <div class='modal'>\
@@ -434,9 +467,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
           $("body").prepend(modal);
         });
         GmailNotes.Inject.sendMessage(request);
-
-        // prevent event propagation  
-        return false;
       },
 
       submit : function(subject, event) {

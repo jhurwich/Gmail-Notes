@@ -82,11 +82,13 @@ if (typeof(GmailNotes.Bkgrd) == "undefined") {
           if (typeof(stored.notes) == "undefined") {
             stored.notes = {};
           }
-          stored.notes[request.subject] = { text: request.text, color: request.color };
 
           if (typeof(stored.notes[request.subject]) != "undefined" && request.text == "") {
             // clearing note, no text provided
             delete stored.notes[request.subject];            
+          }
+          else {
+            stored.notes[request.subject] = { text: request.text, color: request.color };
           }
 
           chrome.storage.sync.set({ "notes" : stored.notes }, function() {
