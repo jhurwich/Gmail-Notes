@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Gmail Notes",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Write notes within Gmail.",
   "homepage_url": "http://gmail.com",
   "icons": {
