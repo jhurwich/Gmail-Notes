@@ -38,7 +38,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
     MAX_TRIES : 5,
     run : function(count) {
       var self = GmailNotes.Inject;
-      self.log("run() start");
+      self.log("Inject.run() start");
 
       // cancel if deferred too many times
       if (count > self.MAX_TRIES) {
@@ -51,7 +51,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         if (typeof(count) == "undefined") {
           count = 0;
         }
-        self.log("run() deferred, #" + (count + 1));
+        self.log("Inject.run() deferred, #" + (count + 1));
         setTimeout(self.run, self.TRY_DELAY, (count + 1));
         return;
       }
@@ -59,7 +59,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       self.setupObservers();
       self.Notes.run();
 
-      self.log("run() complete");
+      self.log("Inject.run() complete");
     },
 
     mainObserver : null,
@@ -68,6 +68,9 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       var utils = GmailNotes.Util;
 
       var observeMailTables = function (mailTables) {
+        var significantChange = false;
+
+        /* * * * * * * * * * * * * * * Mail List Observer * * * * * * * * * * * * * * */
         // setup a mutation observer to see if the maillists are ever refreshed so we can add marks again
         MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
         if (GmailNotes.Inject.mailListObserver != null) {
@@ -91,19 +94,24 @@ if (typeof(GmailNotes.Inject) == "undefined") {
               attributes: false
             });
             $(table).attr("observed", true);
+            significantChange = true;
           }
         });
-        GmailNotes.Inject.Notes.modifyUI();
+
+        if (significantChange) {
+          utils.log("Modifying UI after change observed by MainObserver");
+          GmailNotes.Inject.Notes.modifyUI();
+        }
       }
       observeMailTables($("div:has(> div:has(> table))").find("table"));
 
+      /* * * * * * * * * * * * * * * Main Observer * * * * * * * * * * * * * * */
       // setup a mutation observer to catch when maillists are added/refreshed
       MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
       if (GmailNotes.Inject.mainObserver != null) {
         GmailNotes.Inject.mainObserver.disconnect();
       }
       GmailNotes.Inject.mainObserver = new MutationObserver(function(mutations, observer) {
-        var significantChange = false;
         for (var i = 0; i < mutations.length; i++) { 
           var tables = $(mutations[i].target).find("table").not("table[observed='true']");
           if (tables.length == 0) {
@@ -118,10 +126,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
             }
           }
         }
-        
-        if (significantChange) {
-          GmailNotes.Inject.Notes.modifyUI();
-        }
       });
 
       // Use the Gmail link to find the main div
@@ -132,6 +136,19 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         childList: true,
         attributes: false
       });
+
+      /* * * * * * * * * * * * * * * Hash Change Detection * * * * * * * * * * * * * * */
+      setTimeout(function() {
+        var oldHref = location.href;
+        setInterval(function() {
+          var newHref = location.href;
+          if (oldHref !== newHref) {
+            oldHref = newHref;
+            utils.log("Modifying UI after hash change observed");
+            GmailNotes.Inject.Notes.modifyUI();
+          }
+        }, 500);
+      }, 500);
     },
 
     handleResponse: function(response) {
@@ -177,15 +194,13 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var utils = GmailNotes.Util;
         utils.log("Notes.run() start");
 
-        utils.log("-- Requesting notes from backend");
         var request = utils.newRequest({ action : "getNotes",}, function(response) {
           GmailNotes.Inject.Notes.noteMap = response.notes;
           
-          utils.log("-- " + Object.keys(GmailNotes.Inject.Notes.noteMap).length + " notes from backend");
           // utils.log("-- " + JSON.stringify(GmailNotes.Inject.Notes.noteMap));
 
+          utils.log("Notes.run() Modifying UI on First Run")
           GmailNotes.Inject.Notes.modifyUI();
-          utils.log("-- adding notes complete.")
         });
         GmailNotes.Inject.port.postMessage(request);
 
@@ -196,13 +211,23 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       onChange : function(mutations, observer) {
         var utils = GmailNotes.Util;
         var significantChange = false;
-        for (var i = 0; i < mutations.length; i++) { 
+
+        // check if this change was triggered by us (first change would be adding note-col, others are adding note-cell)
+        var isOwnChange = function(aMutations) {
+          return ($(aMutations[0].target).children("td.note-cell").length > 0 || $(aMutations[0].target).children("col.note-col").length > 0)
+        };
+        if(isOwnChange(mutations)) {
+          return;
+        }
+
+        for (var i = 0; i < mutations.length; i++) {
           if (typeof($(mutations[i].target).attr("noted")) == "undefined") {
             significantChange = true;
           }
         }
         
         if (significantChange) {
+          utils.log("Modifying UI after change observed by MailList Observer");
           GmailNotes.Inject.Notes.modifyUI();
         }
       },
@@ -213,36 +238,53 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var utils = GmailNotes.Util;
         GmailNotes.Inject.Notes.markInProgress = true;
 
-        var mailPresentation = $('div[role="main"] table[role="presentation"]');
-        if (mailPresentation.length > 0) {
+        var mailViewTable = $('div[role="main"] table[role="presentation"]');
+        if (mailViewTable.length > 0) {
           // we're in the reading mail view, mark the header only
-          utils.log("Modifying Message View");
-
-          var mailHeader = $(mailPresentation).find("h2").first();
-          var subject = mailHeader.text().substring(0, GmailNotes.Util.SUBJECT_CROP_LENGTH); // make sure the length is cropped
-
-          if (typeof(GmailNotes.Inject.Notes.noteMap[subject]) == "undefined") {
-            // mark non-note
-            var noteOffCell = $("<td class='note-cell'>\
-                                   <div class='note-control'>\
-                                     <div class='note-icon note-off'> </div>\
-                                   </div>\
-                                 </td>");
-            var noteOffDiv = $(noteOffCell).find(".note-off").first();
-            $(noteOffDiv).append($(utils.noteIconSVG));
-            $(mailHeader).before(noteOffCell);
-          } else {
-            // mark note
-          }
-
+          GmailNotes.Inject.Notes.modifyMessageView(mailViewTable);
         } else {
           // We're viewing the full mail list, begin marking rows
-          utils.log("Modifying Mail List");
           GmailNotes.Inject.Notes.modifyMailList();
+        }
+        GmailNotes.Inject.Notes.markInProgress = false;
+      },
+
+      modifyMessageView : function(mailViewTable) {
+        var self = GmailNotes.Inject.Notes;
+        var utils = GmailNotes.Util;
+        utils.log("Modifying Message View");
+
+        var mailHeader = $(mailViewTable).find("h2").first();
+        var subject = mailHeader.text().substring(0, GmailNotes.Util.SUBJECT_CROP_LENGTH); // make sure the length is cropped
+
+        if (typeof(self.noteMap[subject]) == "undefined") {
+          // mark non-note
+          var noteOffCell = self.newNoteOffCell("div", subject);
+          if ($(mailViewTable).find("div.note-cell").length != 0) {
+            $(mailViewTable).find("div.note-cell").first().replaceWith(noteOffCell);
+          }
+          else {
+            $(mailHeader).before(noteOffCell);
+          }
+        } else {
+          // mark note
+          var noteOnCell = self.newNoteOnCell("div",
+                                              subject,
+                                              self.noteMap[subject].text,
+                                              self.noteMap[subject].color);
+          if ($(mailViewTable).find("div.note-cell").length != 0) {
+            $(mailViewTable).find("div.note-cell").first().replaceWith(noteOnCell);
+          }
+          else {
+            $(mailHeader).before(noteOnCell);
+          }
         }
       },
 
       modifyMailList : function() {
+        var utils = GmailNotes.Util;
+        utils.log("Modifying Mail List");
+
         var allRows = $("tbody > tr");
 
         var isMailRowTest = function(index, row) {
@@ -268,29 +310,21 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var noteRows = $(mailRows).filter(GmailNotes.Util.rowHasNoteTest);
         var nonNoteRows = $(mailRows).not(noteRows);
 
-        $(noteRows).map(GmailNotes.Inject.Notes.markNote);
-        $(nonNoteRows).map(GmailNotes.Inject.Notes.markNonNote);
-        GmailNotes.Inject.Notes.markInProgress = false;
+        $(noteRows).map(GmailNotes.Inject.Notes.markNoteRow);
+        $(nonNoteRows).map(GmailNotes.Inject.Notes.markNonNoteRow);
       },
 
-      markNote : function(index, row) {
+      markNoteRow : function(index, row) {
+        var self = GmailNotes.Inject.Notes;
+        var utils = GmailNotes.Util;
+
         $(row).attr("noted", "true");
         var importantCell = $(row).find("td:has(> div[role='img'])").first();
 
-        var noteOnCell = $("<td class='note-cell'>\
-                              <div class='note-control'>\
-                                <div class='note-icon note-on'> </div>\
-                                <div class='note'></div>\
-                              </div>\
-                            </td>");
-        var noteOnDiv = $(noteOnCell).find(".note-on").first();
-        $(noteOnDiv).append($(GmailNotes.Util.noteIconSVG)
-                             .css("background-color", GmailNotes.Inject.Notes.noteMap[GmailNotes.Util.getSubjectForRow(row)].color));
-        
-        $(noteOnCell).click(GmailNotes.Inject.Notes.setNote.curry(row));
-
-        var note = $(noteOnCell).find(".note").first();
-        note.text(GmailNotes.Inject.Notes.noteMap[GmailNotes.Util.getSubjectForRow(row)].text);
+        var noteOnCell = self.newNoteOnCell("td",
+                                            utils.getSubjectForRow(row),
+                                            self.noteMap[utils.getSubjectForRow(row)].text,
+                                            self.noteMap[utils.getSubjectForRow(row)].color);
 
         if ($(row).find("td.note-cell").length != 0) {
           $(row).find("td.note-cell").first().replaceWith(noteOnCell);
@@ -300,19 +334,14 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         }
       },
 
-      markNonNote : function(index, row) {
+      markNonNoteRow : function(index, row) {
+        var self = GmailNotes.Inject.Notes;
+        var utils = GmailNotes.Util;
+
         $(row).attr("noted", "false");
         var importantCell = $(row).find("td:has(> div[role='img'])").first();
 
-        var noteOffCell = $("<td class='note-cell'>\
-                               <div class='note-control'>\
-                                 <div class='note-icon note-off'> </div>\
-                               </div>\
-                             </td>");
-        var noteOffDiv = $(noteOffCell).find(".note-off").first();
-        $(noteOffDiv).append($(GmailNotes.Util.noteIconSVG));
-        
-        $(noteOffCell).click(GmailNotes.Inject.Notes.setNote.curry(row));
+        var noteOffCell = self.newNoteOffCell("td", utils.getSubjectForRow(row));
 
         if ($(row).find("td.note-cell").length != 0) {
           $(row).find("td.note-cell").first().replaceWith(noteOffCell);
@@ -322,7 +351,40 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         }
       },
 
-      setNote : function(row, e) {
+      newNoteOnCell : function(tag, subject, noteText, noteColor) {
+        var noteOnCell = $("<" + tag + " class='note-cell'>\
+                              <div class='note-control'>\
+                                <div class='note-icon note-on'> </div>\
+                                <div class='note'></div>\
+                              </div>\
+                            </" + tag + ">");
+        var noteOnDiv = $(noteOnCell).find(".note-on").first();
+        $(noteOnDiv).append($(GmailNotes.Util.noteIconSVG)
+                             .css("background-color", noteColor));
+        
+        $(noteOnCell).click(GmailNotes.Inject.Notes.setNote.curry(subject));
+
+        var note = $(noteOnCell).find(".note").first();
+        note.text(noteText);
+
+        return noteOnCell;
+      },
+
+      newNoteOffCell : function(tag, subject) {
+        var noteOffCell = $("<" + tag + " class='note-cell'>\
+                               <div class='note-control'>\
+                                 <div class='note-icon note-off'> </div>\
+                               </div>\
+                             </" + tag + ">");
+        var noteOffDiv = $(noteOffCell).find(".note-off").first();
+        $(noteOffDiv).append($(GmailNotes.Util.noteIconSVG));
+        
+        $(noteOffCell).click(GmailNotes.Inject.Notes.setNote.curry(subject));
+
+        return noteOffCell;
+      },
+
+      setNote : function(subject, e) {
         e.preventDefault();
 
         var blackout = $("<div id='blackout'></div>");
@@ -349,7 +411,6 @@ if (typeof(GmailNotes.Inject) == "undefined") {
           $(closeDiv).bind('click', GmailNotes.Inject.Notes.close);
 
           var submitButton = $(modal).find(".submit-button").first();
-          var subject = GmailNotes.Util.getSubjectForRow(row);
           $(submitButton).bind('click', GmailNotes.Inject.Notes.submit.curry(subject));
 
           var colorChooser = $(modal).find(".color-chooser").first();
@@ -363,7 +424,8 @@ if (typeof(GmailNotes.Inject) == "undefined") {
 
           // if there's a note for the row, show it in the text area
           var noteArea = $(modal).find(".note-area").first();
-          if (GmailNotes.Util.rowHasNoteTest(row)) {
+
+          if (typeof(GmailNotes.Inject.Notes.noteMap[subject]) != "undefined") {
             noteArea.val(GmailNotes.Inject.Notes.noteMap[subject].text);
             $(noteArea).select();
           }
@@ -378,6 +440,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       },
 
       submit : function(subject, event) {
+        var utils = GmailNotes.Util;
         var modal = $(".modal").first();
         
         var requestOptions = { action: "setNote" };
@@ -387,8 +450,10 @@ if (typeof(GmailNotes.Inject) == "undefined") {
         var color = $(modal).find(".color-chooser").first().val();
         requestOptions['color'] = color;
 
-        var request = GmailNotes.Util.newRequest(requestOptions, function(response) {
+        var request = utils.newRequest(requestOptions, function(response) {
           GmailNotes.Inject.Notes.noteMap = response.newNoteMap;
+
+          utils.log("Modifying UI after submitting new note");
           GmailNotes.Inject.Notes.modifyUI();
           GmailNotes.Inject.Notes.close();
         });
