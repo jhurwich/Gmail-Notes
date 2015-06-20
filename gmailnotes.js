@@ -129,7 +129,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
       });
 
       // Use the Gmail link to find the main div
-      var gmailA = $("a[title='Gmail']").first();
+      var gmailA = $("a[title='Gmail'], a[title='Mail']").first();
       var mainDiv = $(gmailA).closest("body > div");
       GmailNotes.Inject.mainObserver.observe(mainDiv.first().get(0), {
         subtree: true,
