@@ -17,7 +17,7 @@ td.note-cell {
   padding-top: 4px;
   border-right: 1px solid transparent;
   border-left: 1px solid transparent;
-  border-bottom: 1px #2a2a2a solid;
+  border-bottom: 1px solid transparent;
 }
 div.note-cell > div.note-control {
   width: 20px;
