@@ -35,7 +35,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
     },
 
     TRY_DELAY : 400,
-    MAX_TRIES : 5,
+    MAX_TRIES : 25,
     run : function(count) {
       var self = GmailNotes.Inject;
       self.log("Inject.run() start");
