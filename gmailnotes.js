@@ -369,7 +369,7 @@ if (typeof(GmailNotes.Inject) == "undefined") {
 
         $(noteCell).mousedown(function(e) {
           e.preventDefault();
-          if (e.which == 2) {
+          if (e.which == 2 || e.shiftKey) {
             // middle click
             GmailNotes.Inject.Notes.clearNote(subject);
           } else {
